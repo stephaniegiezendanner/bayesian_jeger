@@ -50,7 +50,7 @@ df[,grep("Entscheidungs", colnames(df))]<-as.numeric(df[,grep("Entscheidungs", c
 ### create new variables
 df$main_ICD<-substr(df$ICD.10, 1,2)
 ind<-which(df$main_ICD=="F3"|df$main_ICD=="F4")
-df$main_ICD_sub<-NA
+df$main_ICD_sub<-df$main_ICD
 df$main_ICD_sub[ind]<-substr(df$ICD.10[ind],1,3)  
 
 

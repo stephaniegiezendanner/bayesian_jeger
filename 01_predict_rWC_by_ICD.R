@@ -2,7 +2,7 @@
 ### question: can we predict the rWC by ICD-10? 
 ### question: can we use bayesian to get an idea of an rWC estimate?
 
-source("00_run_this.R")
+# source("00_prepare_data.R")
 library(ggplot2)
 library(mltools)
 library(data.table)
@@ -27,9 +27,37 @@ library(gganimate)
 library(posterior)
 library(distributional)
 library("bayesplot")
+
+###############################################################################
+### read data
+df<-read.csv(file=file.path(path, "../Jeger_Data_clean.csv"),sep="\t", fileEncoding = "UTF-16LE")
+head(df) 
+df$Sex_f<- ifelse(df$Sex=="F", 1,0)
+
+##################################################################################
+### hot encoding of main ICD
+# dummify the data
+dmy_main_ICD <- dummyVars(" AF.angepasst~ main_ICD_sub", data = df,sep = "_", drop2nd=T)
+
+trsf_main_ICD <- data.frame(predict(dmy_main_ICD, newdata = df))
+head(trsf_main_ICD)
+
+dfn<-cbind.data.frame(trsf_main_ICD, fem_sex=df$Sex_f, 
+                      age_per_10=df$Alter/10-5,
+                      rWC=df$AF.angepasst/100,
+                      df[,grep("Regeln.und.Routinen", colnames(df)):
+                           grep("Mobilitat", colnames(df))])
+#pairs(dfn)
+head(dfn)
+summary(head(dfn))
+dfn$main_ICD_subZ7<-NULL
+
+
 ################################################################################
 ## how to predict rWC`?
-boxplot(df$AF.angepasst~df$main_ICD)
+boxplot(df$AF.angepasst~df$main_ICD,las=2)
+boxplot(df$AF.angepasst~df$main_ICD_sub,las=2)
+
 
 # Basic violin plot
 p <- ggplot(df, aes(x=main_ICD, y=AF.angepasst)) + 
@@ -69,23 +97,7 @@ p3 <- p + stat_qq(aes(sample = AF.angepasst, color = main_ICD)) +
 plot_grid(p1, p2, p3,
           align = "vh", ncol = 3, labels = c("A", "B", "C"))
 
-##################################################################################
-### hot encoding of main ICD
-# dummify the data
-dmy_main_ICD <- dummyVars(" AF.angepasst~ main_ICD", data = df,sep = "_", drop2nd=T)
-df$Sex_f<- ifelse(df$Sex=="F", 1,0)
 
-trsf_main_ICD <- data.frame(predict(dmy_main_ICD, newdata = df))
-head(trsf_main_ICD)
-
-dfn<-cbind.data.frame(trsf_main_ICD, fem_sex=df$Sex_f, 
-                 age_per_10=df$Alter/10,
-                 rWC=df$AF.angepasst/10,
-                 df[,grep("Regeln.und.Routinen", colnames(df)):
-                      grep("Mobilitat", colnames(df))])
-#pairs(dfn)
-head(dfn)
-dfn$main_ICDZ7<-NULL
 ##############################################################################
 ###test  bayesian
 library(tidyverse); set.seed(42)
