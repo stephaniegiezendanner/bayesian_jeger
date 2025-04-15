@@ -138,20 +138,23 @@ codes_per_claimant<-list()
 
 
 source("dictionary.R")
-for (i in 191:length(df$Diagnosen)){
+for (i in 355:length(df$Diagnosen)){
   search_terms<-unlist(strsplit(df$Diagnosen[i],","))
+  search_terms<-trimws(search_terms)
   if(length(grep("somatoforme Schmerzstörung mit Persönlichkeitsänderung",search_terms))>=1){
-   search_terms<- unlist(strsplit(search_terms ,"mit"))
-  }
+   search_terms<- unlist(strsplit(search_terms ,"mit"))  }
   if(length(grep("andauernde Persönlichkeitsänderung mit rezidivierenden Panikattacken",search_terms))>=1){
-    search_terms<- unlist(strsplit(search_terms ,"mit"))
-  }
+    search_terms<- unlist(strsplit(search_terms ,"mit"))}
   
+  search_terms<-search_terms[!search_terms%in% "HIV-Infektion mit V.a. unerwünschte Arzenimittelwirkungen"]
+  search_terms<-search_terms[!search_terms%in% "aktuell remittiert"]
+  search_terms<-search_terms[!search_terms%in% "anhaltende kognitive Beeinträchtigungen"]
+  search_terms<-search_terms[!search_terms%in% "unerwünschte Arzneimittelwirkungen"]
   
   code_per_search_term<-list()
   for (s in search_terms){
     s_dash<-clean_icd_codes(s, search_terms)
-    search_term <- s_dash
+    search_term <- trimws(s_dash)
     icd_codes <- icd_search(search_term)
     # Display results
     (icd_codes$label)
