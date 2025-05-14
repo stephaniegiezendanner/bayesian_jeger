@@ -28,6 +28,7 @@ df$id<-1:nrow(df)
 diagnosen<-df$Diagnosen
 diagnosen<-sapply(strsplit(diagnosen, ","), paste, collapse = " ") 
 diagnosen<-cbind.data.frame(id=df$id,diagnosen)
+
 write.table(diagnosen,file=file.path(path, "../Diagnoses.csv"),sep=",", fileEncoding = "UTF-16LE",
             row.names = F, col.names=T )
 
@@ -132,13 +133,28 @@ summary(df)
 #################################################################################
 ### german alternative
 # Example: Search for codes related to 'Diabetes'
-df$Diagnosen<-gsub(", gegenwärtig", " gegenwärtig",df$Diagnosen)
+df$Diagnosen<-gsub("alktuell", "aktuell",df$Diagnosen)
+for (i in 1:length(df$Diagnosen)){
+  if(length(grep("aktuell",df$Diagnosen[i]))>=1 & length(grep("\\bpsychotische\\w*\\b",df$Diagnosen[i]))>=1 &
+     length(grep("\\bSymptom\\w*\\b",df$Diagnosen[i]))>=1){
+    
+     df$Diagnosen[i]<- gsub("aktuell", "",df$Diagnosen[i])
+      
+  }else if(length(grep("aktuell",df$Diagnosen[i]))>=1){
+      df$Diagnosen[i]<- gsub(", aktuell", " gegenwärtig",df$Diagnosen[i])
+      df$Diagnosen[i]<- gsub("aktuell", "gegenwärtig",df$Diagnosen[i])
+  }
+  if(length(grep(", gegenwärtig|, gegewnärtig",df$Diagnosen[i]))>=1 & 
+     length(grep("Schmerzstörung",df$Diagnosen[i]))==0){
+    df$Diagnosen[i]<-gsub(", gegewnärtig", " gegenwärtig",df$Diagnosen[i])
+    df$Diagnosen[i]<-gsub(", gegenwärtig", " gegenwärtig",df$Diagnosen[i])
+  }
+}
 
 codes_per_claimant<-list()
 
-
 source("dictionary.R")
-for (i in 355:length(df$Diagnosen)){
+for (i in 1:length(df$Diagnosen)){
   search_terms<-unlist(strsplit(df$Diagnosen[i],","))
   search_terms<-trimws(search_terms)
   if(length(grep("somatoforme Schmerzstörung mit Persönlichkeitsänderung",search_terms))>=1){
@@ -146,10 +162,13 @@ for (i in 355:length(df$Diagnosen)){
   if(length(grep("andauernde Persönlichkeitsänderung mit rezidivierenden Panikattacken",search_terms))>=1){
     search_terms<- unlist(strsplit(search_terms ,"mit"))}
   
+
   search_terms<-search_terms[!search_terms%in% "HIV-Infektion mit V.a. unerwünschte Arzenimittelwirkungen"]
   search_terms<-search_terms[!search_terms%in% "aktuell remittiert"]
   search_terms<-search_terms[!search_terms%in% "anhaltende kognitive Beeinträchtigungen"]
   search_terms<-search_terms[!search_terms%in% "unerwünschte Arzneimittelwirkungen"]
+  
+  search_terms<-search_terms[!search_terms %in% ""]
   
   code_per_search_term<-list()
   for (s in search_terms){
@@ -159,25 +178,94 @@ for (i in 355:length(df$Diagnosen)){
     # Display results
     (icd_codes$label)
     
-    # Calculate string distances (lower = more similar)
-    distances <- stringdist(search_term, icd_codes$label, method = "jw")  # Jaro-Winkler is good for typos
-    # Get best match
-    best_match_index <- which.min(distances)
-    best_match <- icd_codes$label[best_match_index]
-    best_match_code <- icd_codes$icd_sub[best_match_index]
+    if(s_dash=="gemischte angststörung"){
+      best_match <- icd_codes$label[2]
+      best_match_code <- icd_codes$icd_sub[2]
+    }else{
+      # Calculate string distances (lower = more similar)
+      distances <- stringdist(search_term, icd_codes$label, method = "osa")  #js Jaro-Winkler is good for typos
+      # Get best match
+      best_match_index <- which.min(distances)
+      best_match <- icd_codes$label[best_match_index]
+      best_match_code <- icd_codes$icd_sub[best_match_index]
+    }
     print(paste(s,":",s_dash,":",best_match, ":", best_match_code ))
     code_per_search_term[[s_dash]]<-best_match_code
+    best_match_code
     }
     codes_per_claimant[[i]]<-code_per_search_term
-    if (any(sapply(code_per_search_term,function(x) length(x))==0)) {
-        break 
-      }
+    # if (any(sapply(code_per_search_term,function(x) length(x))==0)) {
+    #     break 
+    #   }
     }
 codes_per_claimant
-empty_entries <- codes_per_claimant[sapply(codes_per_claimant, function(x) length(x) == 0)]
-print(empty_entries)
 
-write.table(df,file=file.path(path, "../Jeger_Data_clean.csv"),sep=";", fileEncoding = "UTF-16LE",
+dflm<-list()
+for (i in 1:length(codes_per_claimant)){
+  dfl<-codes_per_claimant[[i]]
+  dfl<-as.data.frame(do.call(cbind,dfl))
+  dfm<-matrix(rep(1,length(dfl)), ncol=length(dfl),dimnames = list(i,
+                                                              unlist(dfl)))
+  dfm<-as.data.frame(dfm)
+  dfm$id<-i
+  dflm[[i]]<-dfm
+}
+
+
+#### merge all data frames in list
+f_diagnoses<-Reduce(function(x, y) merge(x, y,all=TRUE), dflm)
+
+### order columns alphabetically
+colnames(f_diagnoses)
+f_diagnoses<-f_diagnoses[,order(colnames(f_diagnoses))]
+colnames(f_diagnoses)
+
+### merge all diagnoses to the df
+dff<-merge(df,f_diagnoses,by="id",all=T)
+
+write.table(dff,file=file.path(path, "../Jeger_Data_clean_f.csv"),sep=";", fileEncoding = "UTF-16LE",
             row.names = F, col.names=T )
 
+### extract only F diagnoses and create higher levels of all diagnoss 
+f_diagnoses<-f_diagnoses[,grep("F.*|id", colnames(f_diagnoses))]
+f_diagnosesc<-f_diagnoses
+for (f in colnames(f_diagnosesc)){
+  if(f!="id"){
+    n<-nchar(f)
+    if(n==3){
+      if(!substr(f,1,(n-1)) %in% colnames(f_diagnosesc)){
+        f_diagnosesc[,substr(f,1,(n-1))]<-NA
+        }
+    }else if (n==4){
+      if(!substr(f,1,(n-1)) %in% colnames(f_diagnosesc)){
+        f_diagnosesc[,substr(f,1,(n-1))]<-NA
+      }
+    }
+  }
+}
+f_diagnosesc<-f_diagnosesc[,order(colnames(f_diagnosesc))]
+head(f_diagnosesc)
+
+### apply values to upper layers/levels
+for (f in colnames(f_diagnosesc)){
+  if(f!="id"){
+    n<-nchar(f)
+    if(n==2){
+      if (length(grep(f,colnames(f_diagnosesc)))>1){
+      f_diagnosesc[,f] <-ifelse(rowSums(f_diagnosesc[ ,grep(f,colnames(f_diagnosesc))],na.rm=T)>=1,1,0)
+      }
+    }else if (n==3){
+      if (length(grep(f,colnames(f_diagnosesc)))>1){
+        f_diagnosesc[,f] <-ifelse(rowSums(f_diagnosesc[ ,grep(f,colnames(f_diagnosesc))],na.rm=T)>=1,1,0)
+      }
+    }
+  }
+}
+f_diagnosesc[is.na(f_diagnosesc)]<-0
+summary(f_diagnosesc)
+### merge all diagnoses to the df
+dff<-merge(df,f_diagnosesc,by="id",all=T)
+
+write.table(dff,file=file.path(path, "../Jeger_Data_clean_f_diag.csv"),sep=";", fileEncoding = "UTF-16LE",
+            row.names = F, col.names=T )
 
