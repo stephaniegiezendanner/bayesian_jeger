@@ -209,7 +209,29 @@ loo_compare(tfit1, tfit2,tfit3,tfit4,tfit5,tfit6,tfit7,tfit8, criterion = "loo")
 
 summary(tfit7)
 
+
+# elpd_diff se_diff
+# tfit7    0.0       0.0 
+# tfit6    0.0       0.3 
+# tfit5  -11.6       6.5 
+# tfit8  -32.3      10.4 
+# tfit4  -46.5      12.1 
+# tfit3  -68.0      15.8 
+# tfit2 -167.5      20.4 
+# tfit1 -176.4      20.7 
+
+
+# loo_compare(tfit6,tfit7,bfit6,bfit5, criterion = "loo")
+# elpd_diff se_diff
+# bfit6    0.0       0.0 
+# bfit5   -9.8       8.4 
+# tfit7 -310.8      51.7 
+# tfit6 -310.9      51.8 
+
+#################################################################################
+###
 ### plot the model fit for a simple fit with MINI ICF-APP
+###
 group<-c("psy",c(paste0("F",c(0:6,8), "XXX"),paste0("F",c(7,9), "XX")))
 for (i in group){
   dfn$group<-dfn[,i]
@@ -294,16 +316,21 @@ for (i in group){
 #### plot fit with subdomains
 ### plot the model fit
 group<-c("psy",c(paste0("F",c(0:6,8), "XXX"),paste0("F",c(7,9), "XX")))
+domain<-c("Regeln.und.Routinen",  "Aufgabenplanung","Flexibilitat",
+          "fachliche.Kompetenzen","Entscheidungsfahigkeit","Spontanaktivitaten",
+          "Durchhaltefahigkeit","Selbstbehauptungsfahigkeit","Kontaktfahigkeit",
+          "Gruppenfahigkeit","dyadische.Beziehungen","Selbstpflege","Mobilitat")
+
 for (i in group){
+  p2<-list()
+  for (j in domain){
   dfn$group<-dfn[,i]
   
   newdata <- dfn %>%
     dplyr::group_by(group ) %>%
-    tidyr::expand(Regeln.und.Routinen = seq(0, 3,1)) %>%
+    tidyr::expand(dom = seq(0, 4,1)) %>%
     ungroup()
-  head(newdata)
-  
-  dim(newdata)
+
   newdata$age<-0
   if(i!="psy"){
     newdata$psy<-"H"
@@ -311,72 +338,61 @@ for (i in group){
   
   newdata[,c(paste0("F",c(0:6,8), "XXX"),paste0("F",c(7,9), "XX"))]<-"none"
   newdata[, i]<-NULL
+  
   colnames(newdata)[1]<-i
-  
-  newdata[,c("Aufgabenplanung","Flexibilitat",
-             "fachliche.Kompetenzen","Entscheidungsfahigkeit","Spontanaktivitaten",
-             "Durchhaltefahigkeit","Selbstbehauptungsfahigkeit","Kontaktfahigkeit",
-             "Gruppenfahigkeit","dyadische.Beziehungen","Selbstpflege","Mobilitat") ]<-0
-  
-  head(newdata)
-  dim(newdata)
-  newdata$MICF_mean<- rowMeans(newdata[,c("Regeln.und.Routinen",  "Aufgabenplanung","Flexibilitat",
-                                          "fachliche.Kompetenzen","Entscheidungsfahigkeit","Spontanaktivitaten",
-                                          "Durchhaltefahigkeit","Selbstbehauptungsfahigkeit","Kontaktfahigkeit",
-                                          "Gruppenfahigkeit","dyadische.Beziehungen","Selbstpflege","Mobilitat")])
-  
+  colnames(newdata)[2]<-j
+  newdata[, domain[!domain %in% j] ]<-0
+  newdata$MICF_mean<- rowMeans(newdata[,domain])
   newdata_preds <- fitted(tfit6, newdata = newdata, re_formula = NULL,
                           allow_new_levels=T,probs = c(0.05,0.25,0.5,0.75, 0.95))
   # newdata_preds <- predict(tfit4, newdata = newdata, re_formula = NULL,
   #                         allow_new_levels=T,probs = c(0.05,0.25,0.5,0.75, 0.95))
   
-  head(newdata_preds)
-  
-  
   newdata_preds[which(newdata_preds<0)]<-0
   newdata_preds[which(newdata_preds>1)]<-1
   
   newdata_preds<-newdata_preds*100
-  
   newdata <- cbind(newdata, newdata_preds)
-  head(newdata)
-  
-  hist(newdata$Estimate)
-  
   if (length(grep("F",i))>0){
     title<-substr(i,1,2)
   } else{
     title<-i
   }
   ### plot 
-  p1<-ggplot(newdata, aes(x = MICF_mean, y = Q50)) +
-    geom_line(aes(color = .data[[i]])) +
-    geom_ribbon(aes(ymin = Q5, ymax = Q95, fill = .data[[i]]), alpha = 0.2) +
-    geom_ribbon(aes(ymin = Q25, ymax = Q75, fill = .data[[i]]), alpha = 0.5) +
-    labs(y = "Predicted rWC", title = paste("Posterior Predictive Lines by", title),
-         subtitle = "50% and 90% credible intervals as ribbons") +
-    #theme_minimal() +
-    ylim(c(0,100))+
-    facet_wrap(vars(.data[[i]]))+
-    scale_x_continuous(breaks = seq(0, 3, by = 1))+
-    theme(panel.grid.major.x = element_line(color = "lightgrey",
-                                            size = 0.25,linetype = 2))
-  print(p1)
+  # p1[[j]]<-ggplot(newdata, aes(x = .data[[j]], y = Q50)) +
+  #   geom_line(aes(color = .data[[i]])) +
+  #   geom_ribbon(aes(ymin = Q5, ymax = Q95, fill = .data[[i]]), alpha = 0.2) +
+  #   geom_ribbon(aes(ymin = Q25, ymax = Q75, fill = .data[[i]]), alpha = 0.5) +
+  #   labs(y = "Predicted rWC", title = paste("Posterior Predictive Lines by", title),
+  #        subtitle = "50% and 90% credible intervals as ribbons") +
+  #   #theme_minimal() +
+  #   ylim(c(0,100))+
+  #   facet_wrap(vars(.data[[i]]))+
+  #   scale_x_continuous(breaks = seq(0, 3, by = 1))+
+  #   theme(panel.grid.major.x = element_line(color = "lightgrey",
+  #                                           size = 0.25,linetype = 2))
+  # print(p1 [[j]])
   
-  p2<-ggplot(newdata, aes(x = MICF_mean, y = Q50)) +
-    geom_line(aes(color = .data[[i]])) +
+  p2[[j]]<-ggplot(newdata, aes(x = .data[[j]], y = Q50)) +
+    geom_line(aes(color = .data[[i]]),size=1.5) +
+    geom_ribbon(aes(ymin = Q25, ymax = Q75, fill = .data[[i]]), alpha = 0.2) +
     #geom_ribbon(aes(ymin = Q5, ymax = Q95, fill = .data[[i]]), alpha = 0.2) +
-    labs(y = "Predicted rWC", title = paste("Posterior Predictive Lines by", title)) +
+    labs(y = "Predicted rWC", title = paste("Posterior Predictive Lines by", title),
+         subtitle = "50% credible intervals as ribbons") +
     #theme_minimal() +
     ylim(c(0,100))+
     #facet_wrap(vars(.data[[i]]))+
     #scale_x_continuous(breaks = seq(0, 3, by = 1))+
     theme(panel.grid.major.x = element_line(color = "lightgrey",
                                             size = 0.25,linetype = 2))
-  print(p2)
-  p3<-ggarrange(p1,p2,ncol = 2)
+    
+  print(p2[[j]])
+  }
+ 
+  p3<-ggarrange( plotlist =p2,common.legend = T)
   print(p3)
-  ggsave(filename = file.path("Figures/Bayesian/Student/", paste0("Posterior_predictions_",i,".tiff" )),
-         plot=p3,device="tiff", width=20, height=10, units="in", dpi=300)
+  
+  ggsave(filename = file.path("Figures/Bayesian/Student/", paste0("Posterior_predictions_by_domain_and_",i,".tiff" )),
+         plot=p3,device="tiff", width=30, height=30, units="in", dpi=300,bg = "white")
 }
 
