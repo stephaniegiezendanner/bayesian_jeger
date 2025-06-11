@@ -63,6 +63,7 @@ df[,grep("Entscheidungs", colnames(df))]<-as.numeric(df[,grep("Entscheidungs", c
 df$fachliche.Kompetenzen[which(df$fachliche.Kompetenzen>4)]<-2
 table(df$fachliche.Kompetenzen)
 
+
 ### create new variables
 df$main_ICD<-substr(df$ICD.10, 1,2)
 table(df$main_ICD)
@@ -91,6 +92,11 @@ table(df$main_ICD_sub)
 ### corrections
 ind<-which(df$Sex=="W")
 df$Sex[ind]<-"F"
+
+### new variables
+df$MICF_mean<-rowMeans(df[,grep("Regeln.und.Routinen", colnames(df)):
+                            grep("Mobilitat", colnames(df))],na.rm = T)
+
 
 # ind<-which(df$main_ICD==43)
 # df[ind ,'ICD.10'] <-paste0("F",df[ind ,'ICD.10'])
@@ -178,18 +184,25 @@ for (i in 1:length(df$Diagnosen)){
     # Display results
     (icd_codes$label)
     
-    if(s_dash=="gemischte angststörung"){
-      best_match <- icd_codes$label[2]
-      best_match_code <- icd_codes$icd_sub[2]
+    if(length(grep("gemischte angststörung", s_dash))>=1 &length(grep("organisch*.", s_dash))==0){
+      icd_codes<-icd_codes[-grep("organisch*.", tolower(icd_codes$label)),]
+      distances <- stringdist(search_term, icd_codes$label, method = "osa")  #jw Jaro-Winkler is good for typos
+      best_match <- icd_codes$label[best_match_index]
+      best_match_code <- icd_codes$icd_sub[best_match_index]
+    }else if(length(grep("dissoziative störung", s_dash))>=1 &length(grep("organisch*.", s_dash))==0){
+      icd_codes<-icd_codes[-grep("organisch*.", tolower(icd_codes$label)),]
+      distances <- stringdist(search_term, icd_codes$label, method = "osa")  #jw Jaro-Winkler is good for typos
+      best_match <- icd_codes$label[best_match_index]
+      best_match_code <- icd_codes$icd_sub[best_match_index]
     }else{
       # Calculate string distances (lower = more similar)
-      distances <- stringdist(search_term, icd_codes$label, method = "osa")  #js Jaro-Winkler is good for typos
+      distances <- stringdist(search_term, icd_codes$label, method = "osa")  #jw Jaro-Winkler is good for typos
       # Get best match
       best_match_index <- which.min(distances)
       best_match <- icd_codes$label[best_match_index]
       best_match_code <- icd_codes$icd_sub[best_match_index]
     }
-    print(paste(s,":",s_dash,":",best_match, ":", best_match_code ))
+   # print(paste(s,":",s_dash,":",best_match, ":", best_match_code ))
     code_per_search_term[[s_dash]]<-best_match_code
     best_match_code
     }
@@ -211,6 +224,7 @@ for (i in 1:length(codes_per_claimant)){
   dflm[[i]]<-dfm
 }
 
+table(unlist(lapply(dflm, function(x) length(x))), useNA ="ifany" )
 
 #### merge all data frames in list
 f_diagnoses<-Reduce(function(x, y) merge(x, y,all=TRUE), dflm)
@@ -265,7 +279,47 @@ f_diagnosesc[is.na(f_diagnosesc)]<-0
 summary(f_diagnosesc)
 ### merge all diagnoses to the df
 dff<-merge(df,f_diagnosesc,by="id",all=T)
+dff[which(dff$main_ICD=="F3"&dff$F3==0),]
 
+# dff<-dff[ ,-grep("F.*X$",colnames(dff))]
+
+data_fxxx<-list()
+for (num in 0:9){
+  if(length(grep(paste0("^F",num,".*.."), colnames(dff)))>0){
+  data<-dff[,grep(paste0("^F",num,".*.."), colnames(dff))]
+  data$id<-dff$id
+  ind<-which(rowSums(data[, 1:(length(data)-1)])!=0)
+  data[ind,]
+  data[,paste0("F",num,"XXX")]<-"none"
+  data[,paste0("F",num,"XXX")][ind] <- toupper(names(data)[max.col(data[ind,1:(length(data)-2)])])
+  head(data)
+  data_fxxx[[paste(num)]]<-data[,c("id",paste0("F",num,"XXX"))]
+  }
+}
+data_fxxx
+
+data_fxx<-list()
+for (num in  0:9){
+  if(length(grepl(paste0("^F",num,".*.$"), colnames(dff)) & nchar(colnames(dff))==3)>0){
+  data<-dff[grepl(paste0("^F",num,".*.$"), colnames(dff)) & nchar(colnames(dff))==3]
+  data$id<-dff$id
+  ind<-which(rowSums(data[, 1:(length(data)-1)])!=0)
+  data[ind,]
+  data[,paste0("F",num,"XX")]<-"none"
+  data[,paste0("F",num,"XX")][ind] <- toupper(names(data)[max.col(data[ind,1:(length(data)-2)])])
+  head(data)
+  data_fxx[[paste(num)]]<-data[,c("id",paste0("F",num,"XX"))]
+  }
+}
+data_fxx
+fxx_diagnoses<-Reduce(function(x, y) merge(x, y,all=TRUE), data_fxx)
+head(fxx_diagnoses)
+fxxx_diagnoses<-Reduce(function(x, y) merge(x, y,all=TRUE), data_fxxx)
+head(fxxx_diagnoses)
+
+### merge fxx and fxxx to the rest
+dff<-merge(dff,fxx_diagnoses, by="id")
+dff<-merge(dff,fxxx_diagnoses, by="id")
 write.table(dff,file=file.path(path, "../Jeger_Data_clean_f_diag.csv"),sep=";", fileEncoding = "UTF-16LE",
             row.names = F, col.names=T )
 
